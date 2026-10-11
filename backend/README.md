@@ -70,4 +70,10 @@ Les routes `/chats` et `/chats/{id}/messages` vérifient le JWT et le propriéta
 
 Configurer `WORLD_NEWS_API_KEY` dans `.env` et dans Railway, puis redémarrer le backend. À la création d'une discussion, `/top-news` charge les actualités françaises du jour (date en Europe/Paris). Le prompt contient jusqu'à dix titres et résumés, et reste enregistré dans le champ JSON `Chat.messages` pour toute la discussion. Aucune migration n'est nécessaire.
 
-Une ancienne discussion conserve son contexte d'origine ; créer une nouvelle discussion pour obtenir les dernières actualités. En cas de clé absente, quota dépassé ou actualités indisponibles, l'application affiche une erreur sans créer une discussion incomplète. Les tests simulent World News API avec `httpx.MockTransport`, sans consommer son quota.
+Une ancienne discussion conserve son contexte d'origine ; créer une nouvelle discussion pour charger le contexte du jour ou demander à l'agent de rechercher de nouveaux articles. En cas de clé absente, quota dépassé ou actualités indisponibles, l'application affiche une erreur sans créer une discussion incomplète. Les tests simulent World News API avec `httpx.MockTransport`, sans consommer son quota.
+
+## Outil de recherche d'articles
+
+L'agent Mistral peut appeler `search_news(query, days=7)` pour approfondir un sujet avec `/search-news`. Il reçoit jusqu'à cinq articles récents en français, avec résumé, extrait, lien et date disponibles, puis répond en citant les sources. Les arguments sont validés et chaque message est limité à trois recherches. L'outil utilise la même `WORLD_NEWS_API_KEY` que les actualités initiales.
+
+Les appels d'outil et les résultats sont conservés dans l'historique JSON, sans modifier le prompt initial. Ils restent disponibles lors d'une reprise, y compris dans une ancienne discussion. Les tests `FunctionModel` vérifient l'exécution de la recherche, l'utilisation des articles, leur persistance et les autorisations. Voir le [guide du chat](../docs/chat.md).

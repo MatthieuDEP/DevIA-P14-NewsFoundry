@@ -6,7 +6,8 @@ from fastapi import APIRouter, Depends, HTTPException, Path, Response
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from pydantic_ai import ModelMessagesTypeAdapter
 from pydantic_ai.messages import UserPromptPart
-from pydantic_ai.exceptions import ModelAPIError, ModelHTTPError, UnexpectedModelBehavior, UserError
+from pydantic_ai.exceptions import ModelAPIError, ModelHTTPError, UnexpectedModelBehavior, UsageLimitExceeded, UserError
+from pydantic_ai.usage import UsageLimits
 from sqlalchemy import update
 from sqlmodel import Session, select
 
@@ -123,7 +124,10 @@ async def add_message(
         history = await initial_history()
     try:
         result = await asyncio.wait_for(
-            chat_agent.run(body.content, message_history=history), timeout=50,
+            chat_agent.run(
+                body.content, message_history=history,
+                usage_limits=UsageLimits(request_limit=5, tool_calls_limit=3),
+            ), timeout=50,
         )
     except TimeoutError:
         raise HTTPException(504, "L’assistant met trop de temps à répondre. Réessayez.") from None
@@ -135,6 +139,8 @@ async def add_message(
         raise HTTPException(status, "L’assistant est temporairement indisponible. Réessayez.") from None
     except UserError:
         raise HTTPException(503, "L’assistant est temporairement indisponible. Réessayez.") from None
+    except UsageLimitExceeded:
+        raise HTTPException(502, "La recherche a atteint sa limite. Essayez une question plus précise.") from None
     except (ModelAPIError, UnexpectedModelBehavior):
         raise HTTPException(502, "L’assistant n’a pas pu répondre. Réessayez.") from None
 

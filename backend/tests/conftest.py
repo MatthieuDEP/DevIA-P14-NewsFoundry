@@ -34,7 +34,7 @@ def client(monkeypatch):
     monkeypatch.setattr(database, "engine", engine)
     monkeypatch.setenv("JWT_SECRET_KEY", "chat-tests-secret-not-for-production-123456")
     database.init_db()
-    with chat_agent.override(model=TestModel(custom_output_text="Voici une réponse de test.")):
+    with chat_agent.override(model=TestModel(call_tools=[], custom_output_text="Voici une réponse de test.")):
         with TestClient(app) as client:
             yield client
     app.dependency_overrides.clear()
