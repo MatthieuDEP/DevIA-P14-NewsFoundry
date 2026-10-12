@@ -83,3 +83,9 @@ Les appels d'outil et les résultats sont conservés dans l'historique JSON, san
 `POST /chats/{id}/reviews` génère une revue sur un sujet à partir de l'historique sauvegardé. Un agent Mistral spécialisé, sans outil de recherche, fournit une sortie PydanticAI structurée : titre, synthèse générale et synthèses d'articles. Les revues sont conservées dans `Chat.reviews` et `GET /reviews` retourne uniquement celles de l'utilisateur connecté.
 
 Redémarrer le backend applique une migration additive pour ajouter le champ aux anciennes bases. Voir le [guide des revues de presse](../docs/reviews.md) pour les routes, le stockage, le prompt, les erreurs et les tests.
+
+## RAG sur les articles complets
+
+Les recherches conservent leurs URLs dans `Chat.loaded_articles` et leurs textes complets dans `Chat.article_documents`. Avant une revue, LlamaIndex crée un index temporaire et sélectionne les passages proches du sujet avec les embeddings Mistral. L'agent synthétise les sources retenues et ses liens sont validés. La clé Mistral existante suffit ; `MISTRAL_EMBEDDING_MODEL` vaut `mistral-embed` par défaut.
+
+Les anciennes discussions restent utilisables et signalent une revue fondée sur l'historique tant qu'aucune nouvelle recherche n'a chargé de texte complet. Le redémarrage du backend ajoute les champs nécessaires sans supprimer les données. Voir le [guide RAG](../docs/rag.md).

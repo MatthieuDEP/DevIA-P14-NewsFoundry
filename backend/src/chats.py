@@ -12,7 +12,7 @@ from sqlalchemy import update
 from sqlmodel import Session, select
 
 from auth import get_current_user
-from chat_agent import as_utc, chat_agent, initial_history, public_messages
+from chat_agent import ChatDocuments, as_utc, chat_agent, initial_history, public_messages
 from database import get_session
 from models import Chat, User, utc_now
 
@@ -116,6 +116,8 @@ async def add_message(
     chat = owned_chat(chat_id, user.id, session)
     owner_id, revision = user.id, chat.revision
     title, created_at = chat.title, chat.created_at
+    previous_documents = chat.article_documents
+    documents = ChatDocuments()
     history = ModelMessagesTypeAdapter.validate_python(chat.messages)
     # Libérer la connexion de lecture pendant l'attente réseau du modèle.
     session.rollback()
@@ -125,7 +127,7 @@ async def add_message(
     try:
         result = await asyncio.wait_for(
             chat_agent.run(
-                body.content, message_history=history,
+                body.content, message_history=history, deps=documents,
                 usage_limits=UsageLimits(request_limit=5, tool_calls_limit=3),
             ), timeout=50,
         )
@@ -148,13 +150,19 @@ async def add_message(
         raise HTTPException(502, "L’assistant n’a pas pu répondre. Réessayez.")
     saved_history = ModelMessagesTypeAdapter.dump_python(result.all_messages(), mode="json")
     updated_at = utc_now()
+    # Dédupliquer les sources et garder le dernier contenu chargé pour une même URL.
+    merged_documents = {article["url"]: article for article in previous_documents}
+    merged_documents.update({article["url"]: article for article in documents.articles})
     if not any(isinstance(part, UserPromptPart) for message in history for part in message.parts):
         title = body.content[:80]
     # Une seconde requête ne doit pas écraser un échange enregistré entre-temps.
     changed = session.execute(
         update(Chat)
         .where(Chat.id == chat_id, Chat.user_id == owner_id, Chat.revision == revision)
-        .values(messages=saved_history, title=title, updated_at=updated_at, revision=revision + 1)
+        .values(
+            messages=saved_history, title=title, updated_at=updated_at, revision=revision + 1,
+            loaded_articles=list(merged_documents), article_documents=list(merged_documents.values()),
+        )
         .execution_options(synchronize_session=False)
     )
     if changed.rowcount != 1:

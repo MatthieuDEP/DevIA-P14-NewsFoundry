@@ -13,6 +13,8 @@ dependencies = [
     "pyjwt>=2.15.1",
     "pydantic-ai-slim[mistral]>=2.55.0",
     "httpx>=0.28.1",
+    "llama-index-core>=0.14.25",
+    "httpx2>=2.13.1",
 ]
 
 [dependency-groups]

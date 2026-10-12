@@ -10,7 +10,7 @@ from sqlalchemy import inspect, text
 from sqlmodel import Session, create_engine
 
 import database
-from migrations import ensure_reviews_column
+from migrations import ensure_chat_columns
 from models import Chat
 from review_agent import review_agent
 
@@ -182,11 +182,13 @@ def test_additive_migration_preserves_old_chat_and_is_repeatable():
     with engine.begin() as connection:
         connection.execute(text("CREATE TABLE chat (id INTEGER PRIMARY KEY, messages JSON NOT NULL)"))
         connection.execute(text("INSERT INTO chat (id, messages) VALUES (1, :messages)"), {"messages": '[{"saved":true}]'})
-    ensure_reviews_column(engine)
-    ensure_reviews_column(engine)
+    ensure_chat_columns(engine)
+    ensure_chat_columns(engine)
     with engine.connect() as connection:
-        row = connection.execute(text("SELECT messages, reviews FROM chat WHERE id=1")).one()
+        row = connection.execute(text("SELECT messages, reviews, loaded_articles, article_documents FROM chat WHERE id=1")).one()
         assert json.loads(row.messages) == [{"saved": True}]
         assert json.loads(row.reviews) == []
+        assert json.loads(row.loaded_articles) == []
+        assert json.loads(row.article_documents) == []
         assert sum(column["name"] == "reviews" for column in inspect(connection).get_columns("chat")) == 1
     engine.dispose()

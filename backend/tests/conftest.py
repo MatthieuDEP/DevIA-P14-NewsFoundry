@@ -21,6 +21,13 @@ with patch.dict(os.environ, {"DATABASE_URL": "sqlite://"}):
 @pytest.fixture(autouse=True)
 def no_external_llm_requests(monkeypatch):
     monkeypatch.setattr(ai_models, "ALLOW_MODEL_REQUESTS", False)
+    from embeddings import MistralEmbedding
+
+    def forbid_embeddings(*args, **kwargs):
+        raise AssertionError("Les tests doivent simuler les embeddings Mistral.")
+
+    monkeypatch.setattr(MistralEmbedding, "_get_text_embeddings", forbid_embeddings)
+    monkeypatch.setattr(MistralEmbedding, "_aget_text_embeddings", forbid_embeddings)
 
 
 @pytest.fixture

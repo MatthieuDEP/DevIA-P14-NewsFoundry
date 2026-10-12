@@ -42,6 +42,7 @@ JWT_SECRET_KEY=<clé aléatoire propre à la production>
 CORS_ORIGINS=https://<domaine-du-frontend-vercel>
 MISTRAL_API_KEY=<clé privée Mistral>
 MISTRAL_MODEL=ministral-8b-latest
+MISTRAL_EMBEDDING_MODEL=mistral-embed
 WORLD_NEWS_API_KEY=<clé privée World News API>
 ```
 

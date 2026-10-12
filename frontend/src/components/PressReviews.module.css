@@ -51,6 +51,14 @@
   margin-top: 8px;
 }
 
+.sourceNotice {
+  margin-top: 8px;
+  max-width: 650px;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
 .chatLink {
   min-height: 44px;
   padding: 8px 0;

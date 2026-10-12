@@ -94,7 +94,7 @@ async def fetch_top_news():
     return {"date": date, "articles": articles}
 
 
-async def fetch_search_news(query: str, days: int = 7):
+async def fetch_search_news(query: str, days: int = 7, *, loaded_documents=None):
     """Retourner cinq articles récents en français dans un format court et sourcé."""
     from_date = (today() - timedelta(days=days)).isoformat()
     payload = await request_news("search-news", {
@@ -127,6 +127,15 @@ async def fetch_search_news(query: str, days: int = 7):
             "url": url,
             "published_at": (article.publish_date or "")[:32] or None,
         })
+        if url and loaded_documents is not None:
+            # Le contenu complet reste dans le stockage du chat, pas dans le retour au LLM.
+            loaded_documents.append({
+                "url": url, "title": title,
+                "summary": (article.summary or "").strip(),
+                "text": (article.text or "").strip(),
+                "published_at": (article.publish_date or "")[:32] or None,
+                "loaded_at": datetime.now(timezone.utc).isoformat(),
+            })
         if len(articles) == 5:
             break
     return {

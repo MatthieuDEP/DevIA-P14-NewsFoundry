@@ -13,7 +13,8 @@ from auth import get_current_user
 from chats import owned_chat
 from database import get_session
 from models import Chat, User, utc_now
-from review_agent import review_agent, review_prompt, source_urls
+from review_agent import ReviewContent, ReviewSources, review_agent, review_prompt, source_urls
+from rag import retrieve_articles
 
 router = APIRouter(tags=["Revues de presse"])
 ChatId = Annotated[int, Path(gt=0, le=2**63 - 1)]
@@ -22,6 +23,42 @@ ChatId = Annotated[int, Path(gt=0, le=2**63 - 1)]
 class ReviewRequest(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
     topic: str = Field(min_length=2, max_length=200)
+
+
+def no_matching_review(topic):
+    return ReviewContent(
+        title=f"Revue de presse : {topic}"[:200],
+        summary="Aucun article chargé ne correspond suffisamment à ce sujet. Recherchez de nouvelles sources ou précisez le thème.",
+        articles=[],
+    ), "no_match"
+
+
+async def generate_content(topic, history, article_documents):
+    selected = None
+    mode = "history"
+    if any(article.get("text", "").strip() for article in article_documents):
+        selected = await retrieve_articles(topic, article_documents)
+        mode = "full_text"
+        if not selected:
+            return no_matching_review(topic)
+    sources = ReviewSources(
+        urls={article["url"] for article in selected} if selected is not None else source_urls(history),
+        selected_only=selected is not None,
+    )
+    result = await review_agent.run(
+        review_prompt(topic, history, selected), deps=sources,
+        usage_limits=UsageLimits(request_limit=3),
+    )
+    if selected is not None:
+        if not result.output.articles:
+            return no_matching_review(topic)
+        metadata = {article["url"]: article for article in selected}
+        for article in result.output.articles:
+            source = metadata[str(article.url)]
+            # Les titres et dates proviennent des sources, pas d'une reformulation du modèle.
+            article.title = source["title"]
+            article.published_at = source.get("published_at")
+    return result.output, mode
 
 
 @router.get("/reviews")
@@ -52,15 +89,15 @@ async def generate_review(
     chat = owned_chat(chat_id, user.id, session)
     owner_id, revision = user.id, chat.revision
     history, previous = chat.messages, chat.reviews
+    article_documents = chat.article_documents
     title = chat.title
     if not any(part.get("part_kind") == "user-prompt" for message in history for part in message.get("parts", [])):
         raise HTTPException(422, "Échangez d’abord sur un sujet dans cette discussion.")
     session.rollback()
     try:
-        result = await asyncio.wait_for(review_agent.run(
-            review_prompt(body.topic, history), deps=source_urls(history),
-            usage_limits=UsageLimits(request_limit=3),
-        ), timeout=50)
+        content, source_mode = await asyncio.wait_for(
+            generate_content(body.topic, history, article_documents), timeout=50,
+        )
     except TimeoutError:
         raise HTTPException(504, "La génération de la revue prend trop de temps. Réessayez.") from None
     except ModelHTTPError as error:
@@ -75,9 +112,10 @@ async def generate_review(
 
     created_at = utc_now()
     review = {
-        **result.output.model_dump(mode="json"),
+        **content.model_dump(mode="json"),
         "id": str(uuid4()), "topic": body.topic,
         "created_at": created_at.isoformat(), "chat_revision": revision,
+        "source_mode": source_mode,
     }
     # Ne pas écraser une revue concurrente ni sauvegarder une synthèse d'un chat modifié.
     changed = session.execute(

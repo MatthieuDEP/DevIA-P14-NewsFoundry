@@ -33,3 +33,9 @@ class Chat(SQLModel, table=True):
     reviews: list[dict] = Field(
         default_factory=list, sa_column=Column(JSON, nullable=False),
     )
+    loaded_articles: list[str] = Field(
+        default_factory=list, sa_column=Column(JSON, nullable=False),
+    )
+    article_documents: list[dict] = Field(
+        default_factory=list, sa_column=Column(JSON, nullable=False),
+    )

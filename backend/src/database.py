@@ -2,7 +2,7 @@ import os
 from models import User
 from sqlmodel import SQLModel, Session, create_engine, select
 import bcrypt
-from migrations import ensure_reviews_column
+from migrations import ensure_chat_columns
 
 DATABASE_URL = os.getenv("DATABASE_URL")
 engine = create_engine(DATABASE_URL, pool_pre_ping=True)
@@ -24,7 +24,7 @@ def normalize_password_hash(value):
 
 def init_db():
     SQLModel.metadata.create_all(engine)
-    ensure_reviews_column(engine)
+    ensure_chat_columns(engine)
     print("Database initialized successfully")
 
     # Creating a default user

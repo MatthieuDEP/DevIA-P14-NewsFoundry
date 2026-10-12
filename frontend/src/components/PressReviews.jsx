@@ -25,6 +25,9 @@ function ReviewCard({ review, onOpenChat, disabled }) {
           <h2 id={`review-${review.id}`}>{review.title}</h2>
           <time dateTime={review.created_at}>{new Intl.DateTimeFormat("fr-FR", { dateStyle: "long", timeStyle: "short" }).format(new Date(review.created_at))}</time>
           <p className={styles.topic}>Sujet : {review.topic}</p>
+          {review.source_mode === "full_text" && <p className={styles.sourceNotice}>Synthèse à partir du contenu des articles chargés.</p>}
+          {review.source_mode === "history" && <p className={styles.sourceNotice}>Synthèse fondée sur l’historique disponible. Recherchez de nouveaux articles pour utiliser leur contenu complet.</p>}
+          {review.source_mode === "no_match" && <p className={styles.sourceNotice}>Aucun article chargé ne correspond suffisamment à ce sujet.</p>}
           <button className={styles.chatLink} type="button" onClick={() => onOpenChat(review.chat_id)} disabled={disabled}>Discussion : {review.chat_title}</button>
         </div>
         <button className={styles.copy} type="button" onClick={copy}>Copier</button>

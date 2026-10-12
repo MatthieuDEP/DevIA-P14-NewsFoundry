@@ -119,9 +119,14 @@ def test_agent_calls_api_uses_results_and_saves_tool_history(client, owner_heade
     assert [item["role"] for item in response.json()["messages"]] == ["user", "assistant"]
     assert "retrieved_at" not in response.text
     with Session(database.engine) as session:
-        history = ModelMessagesTypeAdapter.validate_python(session.get(Chat, chat_id).messages)
+        stored = session.get(Chat, chat_id)
+        history = ModelMessagesTypeAdapter.validate_python(stored.messages)
+        assert stored.loaded_articles == [article()["url"]]
+        assert stored.article_documents[0]["text"] == article()["text"].strip()
+        assert len(stored.article_documents[0]["text"]) > 2000
     returns = [part for message in history for part in message.parts if isinstance(part, ToolReturnPart)]
     assert returns[0].content["articles"][0]["title"] == article()["title"]
+    assert "text" not in returns[0].content["articles"][0]
     prompt = [part.content for message in history for part in message.parts if isinstance(part, SystemPromptPart)]
 
     def reuse(messages, info):
@@ -133,6 +138,9 @@ def test_agent_calls_api_uses_results_and_saves_tool_history(client, owner_heade
     with chat_agent.override(model=FunctionModel(reuse)):
         assert client.post(f"/chats/{chat_id}/messages", headers=owner_headers, json={"content": "Et le matériau ?"}).status_code == 200
     assert len(requests) == 1
+    with Session(database.engine) as session:
+        assert session.get(Chat, chat_id).loaded_articles == [article()["url"]]
+        assert len(session.get(Chat, chat_id).article_documents) == 1
 
 
 @pytest.mark.parametrize("args", [
@@ -200,3 +208,42 @@ def test_another_owner_cannot_trigger_search(client, owner_headers, other_header
         response = client.post(f"/chats/{chat_id}/messages", headers=other_headers, json={"content": "Recherche"})
     assert response.status_code == 404
     fetch.assert_not_awaited()
+
+
+def test_same_article_is_updated_without_duplicate_url(client, owner_headers, search_http):
+    count = 0
+
+    def respond(request):
+        nonlocal count
+        count += 1
+        item = article()
+        item["text"] = f"Contenu complet, version {count}."
+        return httpx.Response(200, json={"news": [item]})
+
+    search_http(respond)
+    chat_id = client.post("/chats", headers=owner_headers).json()["id"]
+    with chat_agent.override(model=FunctionModel(request_search)):
+        for question in ("Recherche des batteries", "Recherche à nouveau"):
+            assert client.post(f"/chats/{chat_id}/messages", headers=owner_headers, json={"content": question}).status_code == 200
+    with Session(database.engine) as session:
+        stored = session.get(Chat, chat_id)
+        assert stored.loaded_articles == [article()["url"]]
+        assert len(stored.article_documents) == 1
+        assert stored.article_documents[0]["text"] == "Contenu complet, version 2."
+
+
+def test_failed_exchange_does_not_save_partial_articles(client, owner_headers, search_http):
+    search_http(lambda request: httpx.Response(200, json={"news": [article()]}))
+    chat_id = client.post("/chats", headers=owner_headers).json()["id"]
+
+    def fail_after_search(messages, info):
+        if any(isinstance(part, ToolReturnPart) for part in messages[-1].parts):
+            raise TimeoutError()
+        return ModelResponse(parts=[ToolCallPart("search_news", {"query": "batteries"}, tool_call_id="failed")])
+
+    with chat_agent.override(model=FunctionModel(fail_after_search)):
+        response = client.post(f"/chats/{chat_id}/messages", headers=owner_headers, json={"content": "Recherche"})
+    assert response.status_code == 504
+    with Session(database.engine) as session:
+        assert session.get(Chat, chat_id).loaded_articles == []
+        assert session.get(Chat, chat_id).article_documents == []
