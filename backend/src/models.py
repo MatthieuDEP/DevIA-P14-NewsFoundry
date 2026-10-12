@@ -30,3 +30,6 @@ class Chat(SQLModel, table=True):
         default_factory=list, sa_column=Column(JSON, nullable=False),
     )
     revision: int = Field(default=0)
+    reviews: list[dict] = Field(
+        default_factory=list, sa_column=Column(JSON, nullable=False),
+    )

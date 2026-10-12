@@ -190,6 +190,44 @@
   font-weight: 600;
 }
 
+.headerMain {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.headerActions,
+.tabs {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.tabs button,
+.reviewsButton,
+.generateButton {
+  min-height: 44px;
+  padding: 10px 16px;
+  border: 0;
+  border-radius: 8px;
+  background: #f5f5f7;
+  color: var(--text);
+  font-size: 14px;
+}
+
+.tabs button[aria-pressed="true"],
+.generateButton {
+  background: var(--accent);
+  color: white;
+}
+
+.generateButton:disabled {
+  opacity: 0.65;
+}
+
 .conversation {
   flex: 1;
   min-height: 0;
@@ -536,6 +574,19 @@
   .header {
     min-height: 64px;
     padding: 8px 12px;
+    flex-wrap: wrap;
+  }
+
+  .headerMain {
+    flex-basis: 100%;
+  }
+
+  .headerActions {
+    width: 100%;
+  }
+
+  .generateButton {
+    flex: 1;
   }
 
   .welcome {

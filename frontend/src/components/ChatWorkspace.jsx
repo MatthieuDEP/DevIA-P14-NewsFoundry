@@ -1,13 +1,18 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { createChat, getChat, listChats, sendMessage } from "@/lib/chats";
+import { createChat, generateReview, getChat, listChats, sendMessage } from "@/lib/chats";
 import RobotIcon from "./RobotIcon";
 import MessageBubble from "./MessageBubble";
+import PressReviews from "./PressReviews";
+import ReviewDialog from "./ReviewDialog";
 import styles from "./ChatWorkspace.module.css";
 
-function updateAddress(id) {
-  window.history.replaceState(null, "", id ? `/?chat=${id}` : "/");
+function updateAddress(id, view = "chat") {
+  const params = new URLSearchParams();
+  if (id) params.set("chat", id);
+  if (view === "reviews") params.set("view", "reviews");
+  window.history.replaceState(null, "", params.size ? `/?${params}` : "/");
 }
 
 export default function ChatWorkspace({ user, onLogout, sessionError }) {
@@ -22,11 +27,14 @@ export default function ChatWorkspace({ user, onLogout, sessionError }) {
   const [pendingMessage, setPendingMessage] = useState(null);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [attempt, setAttempt] = useState(0);
+  const [view, setView] = useState("chat");
+  const [showReviewDialog, setShowReviewDialog] = useState(false);
+  const [isGenerating, setIsGenerating] = useState(false);
   const messageInput = useRef(null);
   const bottom = useRef(null);
   const mutation = useRef(false);
   const selection = useRef(0);
-  const busy = isCreating || isSending || isLoadingChat || isLoading;
+  const busy = isCreating || isSending || isLoadingChat || isLoading || isGenerating;
 
   useEffect(() => {
     const controller = new AbortController();
@@ -35,7 +43,9 @@ export default function ChatWorkspace({ user, onLogout, sessionError }) {
         const items = await listChats({ signal: controller.signal });
         if (controller.signal.aborted) return;
         setChats(items);
-        const requestedId = Number(new URLSearchParams(window.location.search).get("chat"));
+        const params = new URLSearchParams(window.location.search);
+        setView(params.get("view") === "reviews" ? "reviews" : "chat");
+        const requestedId = Number(params.get("chat"));
         if (Number.isSafeInteger(requestedId) && requestedId > 0) {
           const saved = await getChat(requestedId, { signal: controller.signal });
           if (!controller.signal.aborted) setChat(saved);
@@ -79,6 +89,7 @@ export default function ChatWorkspace({ user, onLogout, sessionError }) {
     try {
       const saved = await createChat();
       setChat(saved);
+      setView("chat");
       rememberChat(saved);
       setDraft("");
       setHistoryOpen(false);
@@ -101,6 +112,7 @@ export default function ChatWorkspace({ user, onLogout, sessionError }) {
       const saved = await getChat(id);
       if (requestId !== selection.current) return;
       setChat(saved);
+      setView("chat");
       setDraft("");
       setHistoryOpen(false);
       updateAddress(id);
@@ -148,7 +160,31 @@ export default function ChatWorkspace({ user, onLogout, sessionError }) {
     setChat(null);
     setDraft("");
     setError("");
+    setView("chat");
     updateAddress(null);
+  }
+
+  function changeView(nextView) {
+    setView(nextView);
+    setHistoryOpen(false);
+    updateAddress(chat?.id, nextView);
+  }
+
+  async function createReview(topic) {
+    if (mutation.current || !chat) return;
+    mutation.current = true;
+    setIsGenerating(true);
+    try {
+      await generateReview(chat.id, topic);
+      setShowReviewDialog(false);
+      changeView("reviews");
+    } catch (cause) {
+      if (cause.status === 401) onLogout();
+      throw cause;
+    } finally {
+      mutation.current = false;
+      setIsGenerating(false);
+    }
   }
 
   return (
@@ -183,15 +219,28 @@ export default function ChatWorkspace({ user, onLogout, sessionError }) {
       </aside>
       <div className={styles.workspace}>
         <header className={styles.header}>
-          {chat ? (
+          <div className={styles.headerMain}>
+          {chat && view === "chat" ? (
             <>
               <button className={styles.back} type="button" onClick={goHome} disabled={busy} aria-label="Retour à l’accueil">←</button>
               <div className={styles.heading}><h1>{chat.title}</h1><p>Conversation active</p></div>
             </>
-          ) : <span className={styles.activeTab}>Chat</span>}
+          ) : (
+            <nav className={styles.tabs} aria-label="Espace de travail">
+              <button type="button" onClick={() => changeView("chat")} disabled={busy} aria-pressed={view === "chat"}>Chat</button>
+              <button type="button" onClick={() => changeView("reviews")} disabled={busy} aria-pressed={view === "reviews"}>Revue de presse</button>
+            </nav>
+          )}
+          </div>
+          {chat && view === "chat" && (
+            <div className={styles.headerActions}>
+              <button className={styles.reviewsButton} type="button" onClick={() => changeView("reviews")} disabled={busy}>Mes revues</button>
+              <button className={styles.generateButton} type="button" onClick={() => setShowReviewDialog(true)} disabled={busy || !chat.messages.some((message) => message.role === "user")}>Générer la revue de presse</button>
+            </div>
+          )}
         </header>
         <main id="conversation" className={styles.conversation} tabIndex={-1}>
-          {isLoadingChat || isLoading ? (
+          {view === "reviews" ? <PressReviews onOpenChat={openChat} onLogout={onLogout} disabled={busy} /> : isLoadingChat || isLoading ? (
             <p className={styles.loading} role="status">Chargement de la discussion…</p>
           ) : !chat?.messages.length && !pendingMessage ? (
             <section className={styles.welcome} aria-labelledby="welcome-title">
@@ -220,7 +269,7 @@ export default function ChatWorkspace({ user, onLogout, sessionError }) {
             <button type="button" disabled={busy} onClick={() => { setError(""); setIsLoading(true); setAttempt(attempt + 1); }}>Recharger les discussions</button>
           </div>
         )}
-        <form method="post" className={styles.composer} onSubmit={submitMessage} aria-busy={isSending}>
+        {view === "chat" && <form method="post" className={styles.composer} onSubmit={submitMessage} aria-busy={isSending}>
           <label className={styles.srOnly} htmlFor="message">Votre message</label>
           <textarea ref={messageInput} id="message" value={draft} onChange={(event) => setDraft(event.target.value)} placeholder="Tapez votre message ici…" rows={2} maxLength={4000} disabled={busy} required />
           <button type="submit" disabled={busy || !draft.trim()} aria-label={isSending ? "Envoi en cours" : "Envoyer le message"}>
@@ -228,8 +277,9 @@ export default function ChatWorkspace({ user, onLogout, sessionError }) {
               <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true"><path d="m22 2-7 20-4-9-9-4L22 2Zm0 0L11 13" /></svg>
             )}
           </button>
-        </form>
+        </form>}
       </div>
+      {showReviewDialog && <ReviewDialog onClose={() => setShowReviewDialog(false)} onGenerate={createReview} isGenerating={isGenerating} />}
     </div>
   );
 }

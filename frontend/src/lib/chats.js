@@ -30,3 +30,13 @@ export function sendMessage(id, content) {
     method: "POST", body: JSON.stringify({ content }),
   }, 65000);
 }
+
+export function listReviews(options) {
+  return chatRequest("/reviews", options);
+}
+
+export function generateReview(id, topic) {
+  return chatRequest(`/chats/${id}/reviews`, {
+    method: "POST", body: JSON.stringify({ topic }),
+  }, 65000);
+}

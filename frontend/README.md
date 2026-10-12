@@ -62,3 +62,7 @@ Documentation : [Next.js](https://nextjs.org/docs).
 Dans Vercel, configurer `NEXT_PUBLIC_API_URL` avec l'URL HTTPS publique du backend Railway et redéployer. Cette URL est intégrée au JavaScript pendant la compilation ; elle ne contient aucun secret.
 
 Dans Railway, ajouter l'origine exacte de Vercel à `CORS_ORIGINS`, sans slash final, par exemple `https://mon-projet.vercel.app`. La clé `JWT_SECRET_KEY` reste exclusivement dans Railway.
+
+## Revues de presse
+
+Depuis une discussion, le bouton « Générer la revue de presse » ouvre une modale de choix du sujet. L'onglet « Revue de presse » rassemble les revues de toutes les discussions de l'utilisateur. `ReviewDialog.jsx` gère la modale et `PressReviews.jsx` affiche les synthèses, les articles et les liens. Les styles utilisent des CSS Modules. Voir le [guide des revues](../docs/reviews.md).

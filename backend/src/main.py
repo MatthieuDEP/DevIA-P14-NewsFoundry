@@ -10,6 +10,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from auth import router as auth_router
 from chats import router as chats_router
 from database import init_db
+from reviews import router as reviews_router
 
 app = FastAPI()
 app.add_middleware(
@@ -26,6 +27,7 @@ app.add_middleware(
 )
 app.include_router(auth_router)
 app.include_router(chats_router)
+app.include_router(reviews_router)
 
 
 @app.exception_handler(RequestValidationError)

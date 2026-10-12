@@ -15,6 +15,7 @@ with patch.dict(os.environ, {"DATABASE_URL": "sqlite://"}):
     import database
     from main import app
     from chat_agent import chat_agent
+    from review_agent import review_agent
 
 
 @pytest.fixture(autouse=True)
@@ -35,7 +36,10 @@ def client(monkeypatch):
     monkeypatch.setenv("JWT_SECRET_KEY", "chat-tests-secret-not-for-production-123456")
     database.init_db()
     with chat_agent.override(model=TestModel(call_tools=[], custom_output_text="Voici une réponse de test.")):
-        with TestClient(app) as client:
+        with review_agent.override(model=TestModel(custom_output_args={
+            "title": "Revue de presse de test", "summary": "Synthèse issue de la discussion.",
+            "articles": [{"title": "Article de test", "summary": "Résumé de test.", "url": None}],
+        })), TestClient(app) as client:
             yield client
     app.dependency_overrides.clear()
     engine.dispose()

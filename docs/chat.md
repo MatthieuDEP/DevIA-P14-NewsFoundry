@@ -1,5 +1,7 @@
 # Discussions avec Mistral
 
+La génération et la consultation des revues sont décrites dans le [guide des revues de presse](reviews.md).
+
 ## Utilisation
 
 Après connexion, écrire un premier message ou sélectionner « Nouvelle discussion ». La barre latérale affiche les discussions personnelles, triées par dernière activité. Cliquer sur une discussion recharge son historique. L'adresse `/?chat=<id>` retrouve la discussion après rechargement.

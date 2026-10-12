@@ -77,3 +77,9 @@ Une ancienne discussion conserve son contexte d'origine ; créer une nouvelle di
 L'agent Mistral peut appeler `search_news(query, days=7)` pour approfondir un sujet avec `/search-news`. Il reçoit jusqu'à cinq articles récents en français, avec résumé, extrait, lien et date disponibles, puis répond en citant les sources. Les arguments sont validés et chaque message est limité à trois recherches. L'outil utilise la même `WORLD_NEWS_API_KEY` que les actualités initiales.
 
 Les appels d'outil et les résultats sont conservés dans l'historique JSON, sans modifier le prompt initial. Ils restent disponibles lors d'une reprise, y compris dans une ancienne discussion. Les tests `FunctionModel` vérifient l'exécution de la recherche, l'utilisation des articles, leur persistance et les autorisations. Voir le [guide du chat](../docs/chat.md).
+
+## Revues de presse
+
+`POST /chats/{id}/reviews` génère une revue sur un sujet à partir de l'historique sauvegardé. Un agent Mistral spécialisé, sans outil de recherche, fournit une sortie PydanticAI structurée : titre, synthèse générale et synthèses d'articles. Les revues sont conservées dans `Chat.reviews` et `GET /reviews` retourne uniquement celles de l'utilisateur connecté.
+
+Redémarrer le backend applique une migration additive pour ajouter le champ aux anciennes bases. Voir le [guide des revues de presse](../docs/reviews.md) pour les routes, le stockage, le prompt, les erreurs et les tests.
