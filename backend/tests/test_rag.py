@@ -157,13 +157,6 @@ def test_unselected_history_source_cannot_be_cited(client, owner_headers, fake_e
     assert client.get("/reviews", headers=owner_headers).json() == []
 
 
-def test_other_owner_cannot_index_chat(client, owner_headers, other_headers):
-    chat_id = seed_chat(client, owner_headers, documents())
-    with patch.object(reviews, "retrieve_articles", side_effect=AssertionError("No indexing allowed")):
-        response = client.post(f"/chats/{chat_id}/reviews", headers=other_headers, json={"topic": "Énergie"})
-    assert response.status_code == 404
-
-
 def test_same_url_isolated_between_users(client, owner_headers, other_headers, fake_embeddings):
     first = seed_chat(client, owner_headers, [{"url": "https://example.com/shared", "title": "Batteries", "text": "Les batteries stockent de l'énergie solaire."}])
     second = seed_chat(client, other_headers, [{"url": "https://example.com/shared", "title": "Football", "text": "Un article sur le football."}])
@@ -178,15 +171,25 @@ def test_same_url_isolated_between_users(client, owner_headers, other_headers, f
 
 @pytest.mark.parametrize("error", [HTTPException(429, "Quota temporairement atteint."), HTTPException(502, "Analyse indisponible.")])
 def test_embedding_failure_keeps_previous_reviews(client, owner_headers, monkeypatch, error):
-    chat_id = seed_chat(client, owner_headers, documents())
+    chat_id = seed_chat(client, owner_headers, [])
+    previous = client.post(f"/chats/{chat_id}/reviews", headers=owner_headers, json={"topic": "Énergie"})
+    assert previous.status_code == 201
     with Session(database.engine) as session:
-        original = session.get(Chat, chat_id).messages
+        # Une revue existe avant le chargement des textes destinés au RAG.
+        chat = session.get(Chat, chat_id)
+        chat.article_documents = documents()
+        chat.loaded_articles = [article["url"] for article in documents()]
+        session.add(chat)
+        session.commit()
+        original_messages, original_reviews = chat.messages, chat.reviews
+        assert len(original_reviews) == 1
+        assert original_reviews[0]["id"] == previous.json()["id"]
     monkeypatch.setattr(reviews, "retrieve_articles", AsyncMock(side_effect=error))
     response = client.post(f"/chats/{chat_id}/reviews", headers=owner_headers, json={"topic": "Énergie"})
     assert response.status_code == error.status_code
     with Session(database.engine) as session:
-        assert session.get(Chat, chat_id).messages == original
-        assert session.get(Chat, chat_id).reviews == []
+        assert session.get(Chat, chat_id).messages == original_messages
+        assert session.get(Chat, chat_id).reviews == original_reviews
 
 
 @pytest.mark.parametrize("values", [[[]], [[0.0, 0.0]], [[float("nan"), 1.0]], [[1.0], [1.0, 2.0]]])

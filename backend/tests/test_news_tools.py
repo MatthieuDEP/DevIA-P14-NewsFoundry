@@ -1,6 +1,5 @@
 import asyncio
 from datetime import date
-from unittest.mock import AsyncMock
 
 import httpx
 import pytest
@@ -12,7 +11,6 @@ from pydantic_ai.messages import (
 from pydantic_ai.models.function import FunctionModel
 from sqlmodel import Session
 
-import chat_agent as agent_module
 import database
 import news
 from chat_agent import chat_agent
@@ -166,9 +164,9 @@ def test_invalid_tool_arguments_never_call_api(client, owner_headers, search_htt
     assert requests == []
 
 
-@pytest.mark.parametrize("status", [401, 402, 429, 500])
-def test_tool_api_error_is_given_to_model_without_private_details(client, owner_headers, search_http, status):
-    search_http(lambda request: httpx.Response(status, json={"message": "private provider detail"}))
+def test_tool_api_error_is_given_to_model_without_private_details(client, owner_headers, search_http):
+    # Les différents statuts du client HTTP sont couverts dans test_news.py.
+    search_http(lambda request: httpx.Response(429, json={"message": "private provider detail"}))
     chat_id = client.post("/chats", headers=owner_headers).json()["id"]
     with chat_agent.override(model=FunctionModel(request_search)):
         response = client.post(f"/chats/{chat_id}/messages", headers=owner_headers, json={"content": "Approfondis"})
@@ -198,16 +196,6 @@ def test_search_limit_stops_loop_and_keeps_history(client, owner_headers, search
     assert len(requests) == 3
     with Session(database.engine) as session:
         assert session.get(Chat, chat_id).messages == initial
-
-
-def test_another_owner_cannot_trigger_search(client, owner_headers, other_headers, monkeypatch):
-    chat_id = client.post("/chats", headers=owner_headers).json()["id"]
-    fetch = AsyncMock(side_effect=AssertionError("No search allowed"))
-    monkeypatch.setattr(agent_module, "fetch_search_news", fetch)
-    with chat_agent.override(model=FunctionModel(request_search)):
-        response = client.post(f"/chats/{chat_id}/messages", headers=other_headers, json={"content": "Recherche"})
-    assert response.status_code == 404
-    fetch.assert_not_awaited()
 
 
 def test_same_article_is_updated_without_duplicate_url(client, owner_headers, search_http):

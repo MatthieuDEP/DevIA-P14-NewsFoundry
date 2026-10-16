@@ -33,10 +33,15 @@ def test_create_list_and_reload_owned_chat(client, owner_headers):
 
 def test_another_user_cannot_read_or_modify_chat(client, owner_headers, other_headers):
     chat_id = create_chat(client, owner_headers)
-    with patch.object(chat_agent, "run", side_effect=AssertionError("No model call allowed")):
+    with (
+        patch("chat_agent.fetch_search_news", side_effect=AssertionError("No search allowed")) as search,
+        patch.object(chat_agent, "run", side_effect=AssertionError("No model call allowed")) as run,
+    ):
         assert client.get(f"/chats/{chat_id}", headers=other_headers).status_code == 404
         response = client.post(f"/chats/{chat_id}/messages", headers=other_headers, json={"content": "Intrusion"})
         assert response.status_code == 404
+    search.assert_not_awaited()
+    run.assert_not_awaited()
     assert client.get("/chats", headers=other_headers).json() == []
     assert client.get(f"/chats/{chat_id}", headers=owner_headers).json()["messages"] == []
 

@@ -10,6 +10,7 @@ from sqlalchemy import inspect, text
 from sqlmodel import Session, create_engine
 
 import database
+import reviews
 from migrations import ensure_chat_columns
 from models import Chat
 from review_agent import review_agent
@@ -46,10 +47,28 @@ def test_multiple_reviews_are_saved_across_chats_and_reloaded(client, owner_head
 def test_other_user_cannot_generate_or_list_reviews(client, owner_headers, other_headers):
     chat_id = started_chat(client, owner_headers)
     assert generate(client, owner_headers, chat_id).status_code == 201
-    with patch.object(review_agent, "run", side_effect=AssertionError("No model call allowed")):
+    with Session(database.engine) as session:
+        chat = session.get(Chat, chat_id)
+        chat.article_documents = [{
+            "url": "https://example.com/energy", "title": "Énergie",
+            "text": "Les batteries stockent la production solaire.",
+        }]
+        chat.loaded_articles = ["https://example.com/energy"]
+        session.add(chat)
+        session.commit()
+        original_messages, original_reviews = chat.messages, chat.reviews
+    with (
+        patch.object(reviews, "retrieve_articles", side_effect=AssertionError("No indexing allowed")) as retrieve,
+        patch.object(review_agent, "run", side_effect=AssertionError("No model call allowed")) as run,
+    ):
         assert generate(client, other_headers, chat_id).status_code == 404
+    retrieve.assert_not_awaited()
+    run.assert_not_awaited()
     assert client.get("/reviews", headers=other_headers).json() == []
     assert len(client.get("/reviews", headers=owner_headers).json()) == 1
+    with Session(database.engine) as session:
+        assert session.get(Chat, chat_id).messages == original_messages
+        assert session.get(Chat, chat_id).reviews == original_reviews
 
 
 @pytest.mark.parametrize("method,path,body", [
