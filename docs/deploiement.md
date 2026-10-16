@@ -4,10 +4,10 @@ Le même dépôt GitHub alimente deux déploiements : le frontend sur Vercel et 
 
 ## Adresses de production
 
-- Frontend Vercel : à renseigner ultérieurement.
+- Frontend Vercel : [NewsFoundry](https://dev-ia-p14-news-foundry.vercel.app/).
 - API Railway : à renseigner ultérieurement.
 
-Les adresses publiques seront complétées ultérieurement. Le [guide d'architecture](architecture.md) décrit les échanges entre ces services.
+L'adresse publique de l'API sera complétée ultérieurement. Le [guide d'architecture](architecture.md) décrit les échanges entre ces services.
 
 ## Préparer le dépôt
 

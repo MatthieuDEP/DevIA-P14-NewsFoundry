@@ -10,6 +10,7 @@ wheels/
 .venv
 
 .env
+.vscode/
 
 # Instructions locales pour les assistants de programmation
 AGENTS.md

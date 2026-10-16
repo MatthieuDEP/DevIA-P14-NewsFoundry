@@ -98,4 +98,4 @@ La [GitHub Action](.github/workflows/ci.yml) exécute ces vérifications sur les
 
 ## Hébergement
 
-Le frontend est hébergé sur Vercel ; le backend et PostgreSQL sont hébergés sur Railway. Les services suivent la branche `main` du même dépôt avec `frontend` et `backend` comme répertoires racines respectifs. Les adresses publiques seront renseignées ultérieurement dans le [guide de déploiement](docs/deploiement.md#adresses-de-production).
+Le frontend est accessible sur [NewsFoundry](https://dev-ia-p14-news-foundry.vercel.app/), hébergé sur Vercel. Le backend et PostgreSQL sont hébergés sur Railway. Les services suivent la branche `main` du même dépôt avec `frontend` et `backend` comme répertoires racines respectifs. Le [guide de déploiement](docs/deploiement.md#adresses-de-production) regroupe les adresses de production ; celle de l'API reste à renseigner.
