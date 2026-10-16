@@ -1,16 +1,43 @@
 # NewsFoundry Backend
 
-1. Copier le fichier `.env.example` dans `.env`
+API FastAPI en Python 3.13, avec SQLModel/PostgreSQL, agents PydanticAI Mistral et RAG LlamaIndex. Voir le [guide d'architecture](../docs/architecture.md) pour le rôle des fichiers et les raisons des choix.
 
+## Configuration
 
-2. Installer les dépendances:
+Depuis le dossier `backend/`, à la première installation :
+
 ```bash
-uv sync
+uv sync --frozen
+cp .env.example .env
 ```
 
-2. Démarrer la base de données:
+Compléter `backend/.env` à partir de cet exemple :
+
+| Variable | Rôle et valeur locale |
+| --- | --- |
+| `DATABASE_URL` | Connexion PostgreSQL ; l'exemple utilise `postgresql://user:password@localhost:5434/newsfoundry` |
+| `JWT_SECRET_KEY` | Clé de signature du JWT, d'au moins 32 octets |
+| `CORS_ORIGINS` | Origines du frontend, séparées par des virgules ; valeurs locales `http://localhost:3000,http://127.0.0.1:3000` |
+| `MISTRAL_API_KEY` | Clé privée utilisée pour les agents et les embeddings |
+| `MISTRAL_MODEL` | Modèle du chat et de la rédaction ; défaut `ministral-8b-latest` |
+| `MISTRAL_EMBEDDING_MODEL` | Modèle d'embedding ; défaut `mistral-embed` |
+| `WORLD_NEWS_API_KEY` | Clé privée utilisée pour les actualités et les recherches |
+| `PORT` | Port HTTP ; défaut `8000`, fourni par Railway en production |
+
+Générer la clé JWT :
+
 ```bash
-docker run \
+python3 -c "import secrets; print(secrets.token_hex(32))"
+```
+
+Renseigner le résultat dans `JWT_SECRET_KEY` et conserver cette valeur entre les démarrages. Les fichiers `.env` locaux sont ignorés par Git. Les variables de production sont renseignées dans Railway.
+
+## Base de données locale
+
+Créer PostgreSQL une première fois :
+
+```bash
+docker run -d \
   --name newsfoundry_db \
   -e POSTGRES_USER=user \
   -e POSTGRES_PASSWORD=password \
@@ -19,73 +46,79 @@ docker run \
   postgres:17
 ```
 
-PostgreSQL est accessible sur `localhost:5434`. Le port interne du conteneur reste `5432`.
+Pour démarrer un conteneur existant, notamment après un redémarrage de l'ordinateur :
 
-3. Lancer le backend:
+```bash
+docker start newsfoundry_db
+```
+
+PostgreSQL est accessible sur `localhost:5434` ; son port interne reste `5432`. `DATABASE_URL` doit correspondre aux paramètres du conteneur.
+
+## Lancement
+
+Depuis `backend/` :
+
 ```bash
 uv run --env-file .env src/main.py
 ```
 
-## Connexion
+L'API est accessible sur <http://localhost:8000> et sa documentation interactive sur <http://localhost:8000/docs>. La route `/` sert au contrôle de disponibilité du service.
 
-L'utilisateur de test est `test@test.com`, avec le mot de passe `test`.
+Le démarrage crée les tables, applique les migrations additives de `migrations.py` et crée le compte de test si nécessaire. Les migrations ajoutent les champs JSON aux anciennes bases en conservant les discussions et revues existantes.
 
-Ajouter dans `.env` :
+## Authentification
 
-```text
-JWT_SECRET_KEY=<clé aléatoire>
-CORS_ORIGINS=http://localhost:3000,http://127.0.0.1:3000
-```
+Le compte de test est **`test@test.com`**, avec le mot de passe **`test`**. Le mot de passe est vérifié avec bcrypt ; le token JWT est signé en HS256 et expire après une heure.
 
-Générer la clé avec `python3 -c "import secrets; print(secrets.token_hex(32))"`. Elle doit rester stable entre les redémarrages et ne doit pas être commitée. Une clé locale a déjà été générée pour ce poste.
+`POST /login` reçoit `{"email":"test@test.com","password":"test"}` et retourne `access_token` et `token_type`. Le frontend conserve le JWT et le transmet dans `Authorization: Bearer <token>`. `GET /me` vérifie la session et retourne uniquement l'identifiant et l'email.
 
-`POST /login` reçoit un JSON avec `email` et `password` et retourne `access_token` et `token_type`. Le JWT est signé en HS256 et expire après une heure. `GET /me` vérifie le token transmis dans `Authorization: Bearer <token>` et retourne uniquement l'identifiant et l'email.
+Les routes protégées utilisent l'utilisateur issu du JWT et filtrent le propriétaire des discussions dans les requêtes SQL. Les mots de passe et les clés des services ne sont pas recopiés dans les erreurs publiques.
 
-| Statut | Signification |
-| --- | --- |
-| `401` | Identifiants incorrects ou session invalide/expirée |
-| `422` | Champs de connexion invalides |
-| `503` | Base indisponible ou clé JWT non configurée |
+## Routes
 
-Les hashes bcrypt sont conservés dans la base, sans journalisation SQL des paramètres. Les anciennes valeurs binaires du compte de test sont normalisées en texte au démarrage, sans changer son mot de passe.
+| Méthode | Route | Fonction | JWT requis |
+| --- | --- | --- | --- |
+| `GET` | `/` | Disponibilité de l'API | Non |
+| `POST` | `/login` | Connexion | Non |
+| `GET` | `/me` | Vérification de session | Oui |
+| `POST` | `/chats` | Création d'une discussion et de son contexte d'actualités | Oui |
+| `GET` | `/chats` | Liste des discussions personnelles | Oui |
+| `GET` | `/chats/{id}` | Historique visible d'une discussion | Oui |
+| `POST` | `/chats/{id}/messages` | Envoi d'un message et réponse de l'agent | Oui |
+| `POST` | `/chats/{id}/reviews` | Génération d'une revue sur un sujet | Oui |
+| `GET` | `/reviews` | Revues des discussions de l'utilisateur | Oui |
+
+`/top-news` et `/search-news` sont des routes externes de World News API appelées par `news.py`. L'outil `search_news` est une fonction PydanticAI exécutée dans le backend pendant un échange.
+
+## Fonctionnement des agents
+
+Le chat sauvegarde le contexte initial, les messages et les appels d'outils dans `Chat.messages`. Les recherches conservent aussi les URLs et les documents complets, séparément des extraits transmis au modèle.
+
+La revue est produite par un agent spécialisé, avec une sortie PydanticAI structurée. Quand des textes complets sont disponibles, LlamaIndex sélectionne les passages proches du sujet avec les embeddings Mistral. Les liens sont validés puis la revue est enregistrée dans `Chat.reviews`.
+
+Guides détaillés : [chat et outils](../docs/chat.md), [revues de presse](../docs/reviews.md), [RAG](../docs/rag.md).
 
 ## Tests
+
+Depuis `backend/` :
 
 ```bash
 uv sync --frozen
 uv run --no-sync pytest -q
 ```
 
-Les tests utilisent SQLite en mémoire et couvrent l'authentification, les discussions et leurs autorisations. `TestModel` et `FunctionModel` remplacent Mistral, sans appels facturés. La GitHub Action `.github/workflows/ci.yml` exécute les tests, le lint et la compilation frontend.
+Les tests utilisent SQLite en mémoire. `TestModel`, `FunctionModel`, des réponses HTTP simulées et des embeddings déterministes couvrent l'authentification, les autorisations, les discussions, les outils, les revues, le RAG et les erreurs. Ils ne nécessitent ni clés API ni PostgreSQL démarré.
 
-Sur Railway, ajouter `JWT_SECRET_KEY` avec une clé propre à la production et `CORS_ORIGINS` avec l'origine exacte du frontend Vercel. La variable `DATABASE_URL` reste configurée comme auparavant.
+La [GitHub Action](../.github/workflows/ci.yml) lance ces tests ainsi que le lint et la compilation du frontend sur les pushes et pull requests visant `main`.
 
-## Chat Mistral
+## Déploiement
 
-Configurer `MISTRAL_API_KEY` dans `.env`, puis redémarrer le backend. Le modèle par défaut est `ministral-8b-latest`, configurable via `MISTRAL_MODEL`. La table `Chat` est créée au démarrage sans supprimer les données existantes.
+Railway construit l'image depuis `backend/Dockerfile`, avec `backend/` comme contexte. Les dépendances de production sont installées depuis `uv.lock` avec `--frozen --no-dev`.
 
-Les routes `/chats` et `/chats/{id}/messages` vérifient le JWT et le propriétaire de la discussion. Voir le [guide du chat](../docs/chat.md) pour le prompt, les routes, les erreurs et les tests.
+Depuis la racine du dépôt, vérifier la construction locale :
 
-## Actualités World News API
+```bash
+docker build -t newsfoundry-backend ./backend
+```
 
-Configurer `WORLD_NEWS_API_KEY` dans `.env` et dans Railway, puis redémarrer le backend. À la création d'une discussion, `/top-news` charge les actualités françaises du jour (date en Europe/Paris). Le prompt contient jusqu'à dix titres et résumés, et reste enregistré dans le champ JSON `Chat.messages` pour toute la discussion. Aucune migration n'est nécessaire.
-
-Une ancienne discussion conserve son contexte d'origine ; créer une nouvelle discussion pour charger le contexte du jour ou demander à l'agent de rechercher de nouveaux articles. En cas de clé absente, quota dépassé ou actualités indisponibles, l'application affiche une erreur sans créer une discussion incomplète. Les tests simulent World News API avec `httpx.MockTransport`, sans consommer son quota.
-
-## Outil de recherche d'articles
-
-L'agent Mistral peut appeler `search_news(query, days=7)` pour approfondir un sujet avec `/search-news`. Il reçoit jusqu'à cinq articles récents en français, avec résumé, extrait, lien et date disponibles, puis répond en citant les sources. Les arguments sont validés et chaque message est limité à trois recherches. L'outil utilise la même `WORLD_NEWS_API_KEY` que les actualités initiales.
-
-Les appels d'outil et les résultats sont conservés dans l'historique JSON, sans modifier le prompt initial. Ils restent disponibles lors d'une reprise, y compris dans une ancienne discussion. Les tests `FunctionModel` vérifient l'exécution de la recherche, l'utilisation des articles, leur persistance et les autorisations. Voir le [guide du chat](../docs/chat.md).
-
-## Revues de presse
-
-`POST /chats/{id}/reviews` génère une revue sur un sujet à partir de l'historique sauvegardé. Un agent Mistral spécialisé, sans outil de recherche, fournit une sortie PydanticAI structurée : titre, synthèse générale et synthèses d'articles. Les revues sont conservées dans `Chat.reviews` et `GET /reviews` retourne uniquement celles de l'utilisateur connecté.
-
-Redémarrer le backend applique une migration additive pour ajouter le champ aux anciennes bases. Voir le [guide des revues de presse](../docs/reviews.md) pour les routes, le stockage, le prompt, les erreurs et les tests.
-
-## RAG sur les articles complets
-
-Les recherches conservent leurs URLs dans `Chat.loaded_articles` et leurs textes complets dans `Chat.article_documents`. Avant une revue, LlamaIndex crée un index temporaire et sélectionne les passages proches du sujet avec les embeddings Mistral. L'agent synthétise les sources retenues et ses liens sont validés. La clé Mistral existante suffit ; `MISTRAL_EMBEDDING_MODEL` vaut `mistral-embed` par défaut.
-
-Les anciennes discussions restent utilisables et signalent une revue fondée sur l'historique tant qu'aucune nouvelle recherche n'a chargé de texte complet. Le redémarrage du backend ajoute les champs nécessaires sans supprimer les données. Voir le [guide RAG](../docs/rag.md).
+Le [guide de déploiement](../docs/deploiement.md) décrit PostgreSQL, les variables Railway, le domaine public et les déploiements automatiques.

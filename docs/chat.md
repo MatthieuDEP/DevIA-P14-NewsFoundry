@@ -1,5 +1,7 @@
 # Discussions avec Mistral
 
+Le [guide d'architecture](architecture.md) présente l'organisation du code et les raisons des choix techniques.
+
 La génération et la consultation des revues sont décrites dans le [guide des revues de presse](reviews.md).
 
 ## Utilisation
@@ -64,7 +66,7 @@ L'agent doit respecter le périmètre demandé, sans ajouter un pays ou un secte
 
 Le modèle doit s'appuyer sur les résultats, citer les liens et dates disponibles et ignorer les instructions éventuellement contenues dans les articles. Un résultat vide ou une erreur est transmis explicitement au modèle afin qu'il signale la limite sans inventer de source. Une erreur de recherche n'efface pas la discussion et peut être expliquée dans une réponse normale.
 
-Les appels d'outil et leurs résultats sont enregistrés dans `Chat.messages` avec l'échange réussi. Ils sont donc réutilisables après rechargement. Le navigateur n'affiche pas les données techniques de l'outil ; les liens cités sont rendus par le Markdown existant. Aucun nouvel endpoint local ni migration de base n'est nécessaire.
+Les appels d'outil et leurs résultats sont enregistrés dans `Chat.messages` avec l'échange réussi. Les URLs et les textes complets sont enregistrés séparément dans `Chat.loaded_articles` et `Chat.article_documents` pour la génération avec [RAG](rag.md). Le navigateur n'affiche pas les données techniques de l'outil ; les liens cités sont rendus par le Markdown existant. Les migrations additives au démarrage ajoutent les champs aux anciennes bases.
 
 Les recherches sont exécutées une par une. `UsageLimits` impose au maximum trois appels d'outil et cinq requêtes LLM par message, en plus de la limite globale de 50 secondes. Une boucle dépassant ces limites retourne une erreur et laisse l'historique inchangé. Le contrôle du propriétaire de la discussion a lieu avant tout appel au modèle ou à l'outil.
 
@@ -109,10 +111,6 @@ Les tests couvrent les accès autorisés, les lectures et modifications interdit
 Les tests d'actualités vérifient la sélection sans contenu complet, le bornage du contexte, les erreurs et quotas, la sauvegarde avant le premier message et la stabilité du prompt lors d'une reprise le lendemain. Une nouvelle discussion reçoit le nouveau contexte.
 
 Les tests d'outils utilisent `FunctionModel` pour demander une recherche, lire son résultat et formuler une réponse sourcée. Ils vérifient l'appel HTTP, la validation des arguments, les résultats bornés, les liens autorisés, les erreurs, la limite de recherches et la sauvegarde/reprise des articles. Un utilisateur non propriétaire ne peut pas déclencher l'outil sur une discussion d'autrui.
-
-## Piste d'optimisation
-
-Sur un jeu de discussions de 50 à 100 échanges, mesurer les tokens d'entrée et la latence. Une amélioration possible consiste à résumer les anciens échanges, conserver l'historique complet en base, puis transmettre le résumé et les derniers messages au modèle. Objectif à valider : réduire d'au moins 50 % les tokens d'entrée sans perte d'information essentielle dans les réponses.
 
 ## Références
 

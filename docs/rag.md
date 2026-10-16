@@ -1,5 +1,7 @@
 # Sélection des articles avec LlamaIndex
 
+Le [guide d'architecture](architecture.md) situe le RAG dans le parcours de génération des revues.
+
 ## Utilisation
 
 Dans le chat, demander une recherche de nouveaux articles sur un sujet, puis cliquer sur **Générer la revue de presse** et préciser le thème. Le backend sélectionne des passages dans les textes complets des articles chargés dans cette discussion. L'agent de revue rédige ensuite les synthèses des sources pertinentes.
@@ -37,7 +39,7 @@ Une nouvelle recherche de la même URL remplace son contenu conservé par la der
 5. Le retriever retourne jusqu'à 25 passages proches du sujet. On conserve ceux dont la similarité est au moins 0,72 et à moins de 0,08 du meilleur score.
 6. Les passages sont regroupés par URL, avec au maximum cinq articles et trois passages par article.
 
-Le seuil est un choix initial, pas une garantie universelle de pertinence. Lors d'un essai réel avec Mistral, un sujet sur le stockage énergétique obtenait 0,837 pour le document pertinent, contre environ 0,62–0,65 pour des documents de tennis et d'école. Une demande de pâtisserie sur ce même corpus obtenait moins de 0,69 et était donc exclue. Une évaluation sur des sujets réels est nécessaire pour ajuster ce seuil.
+Le seuil de 0,72 et l'écart au meilleur score écartent les passages éloignés du sujet avant la rédaction. Les candidats retenus sont ensuite soumis à l'agent, qui peut écarter les articles hors sujet.
 
 Pour garder les appels bornés, un corpus dépassant 600 passages retourne `422`. Les batches et la requête de recherche ont des délais réseau de 15 secondes. Le délai global de génération de la revue reste de 50 secondes, indexation incluse. Un problème du service d'embedding est signalé à l'utilisateur ; il ne provoque pas un remplacement silencieux par une revue sans retrieval.
 
@@ -47,7 +49,7 @@ L'agent PydanticAI de revue reçoit l'historique pour comprendre la demande et l
 
 En mode RAG, tous les articles de la revue doivent avoir un lien présent parmi les candidats sélectionnés, sans doublon. Les liens insérés dans les synthèses sont vérifiés aussi. Les titres et dates enregistrés sont repris directement des documents conservés. Le modèle peut écarter des candidats ; s'il n'en retient aucun, la réponse affiche explicitement l'absence de correspondance.
 
-Les revues restent structurées avec `ReviewContent` et sauvegardées dans `Chat.reviews`. Le champ `source_mode` indique `full_text`, `history` ou `no_match` et permet une information claire dans l'interface. La pertinence finale et la fidélité des synthèses nécessitent une évaluation humaine ; les validations de structure et de liens ne prouvent pas tous les faits générés.
+Les revues restent structurées avec `ReviewContent` et sauvegardées dans `Chat.reviews`. Le champ `source_mode` indique `full_text`, `history` ou `no_match` et permet une information claire dans l'interface.
 
 ## Erreurs et tests
 
@@ -59,9 +61,5 @@ uv run pytest -q
 ```
 
 Les tests utilisent un vrai index LlamaIndex avec des embeddings déterministes locaux. Tout appel réel aux embeddings Mistral est interdit dans les tests. Ils vérifient la sélection, les sujets sans correspondance, les faits situés au-delà des extraits du chat, la validation des sources, les erreurs fournisseur, la persistance des textes et la migration. Ils vérifient aussi qu'un utilisateur ne peut pas indexer la discussion d'autrui et que deux utilisateurs avec la même URL conservent des corpus distincts.
-
-## Performance à mesurer
-
-L'index est actuellement reconstruit à chaque génération. Sur un corpus de 50 articles, mesurer le nombre de tokens envoyés aux embeddings et le temps avant affichage de la revue. Une amélioration serait un cache mémoire borné, identifié par propriétaire, discussion, hash des documents et modèle d'embedding. Objectif : éviter au moins 90 % des calculs d'embeddings lors d'une deuxième revue sur le même corpus, sans réutiliser des sources entre utilisateurs. Aucun cache global partagé n'est activé dans cette version.
 
 Références : [RAG LlamaIndex](https://developers.llamaindex.ai/python/framework/understanding/rag/), [index vectoriel](https://developers.llamaindex.ai/python/framework/module_guides/indexing/vector_store_index/), [embeddings personnalisés](https://developers.llamaindex.ai/python/framework/integrations/embeddings/custom_embeddings/).

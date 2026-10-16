@@ -1,80 +1,101 @@
 # NewsFoundry
 
-## Besoins fonctionnels
+NewsFoundry permet d'explorer les actualités dans un chat puis de générer des revues de presse sur les sujets abordés. L'application utilise Mistral pour les échanges et la rédaction, World News API pour les sources et LlamaIndex pour sélectionner les passages pertinents des articles complets.
 
-- L'utilisateur peut se connecter.
-- L’utilisateur peut voir la liste de ses discussions passées.
-- L’utilisateur peut démarrer une nouvelle discussion ou reprendre une ancienne discussion.
-- Un utilisateur n’est pas autorisé à accéder aux discussions d’un autre utilisateur.
-- Le LLM répond aux messages envoyés par l’utilisateur.
-- L'utilisateur peut faire générer une revue de presse à partir d'une discussion.
-- L'application doit afficher des messages d'erreur à l'utilisateur final en cas d'erreur.
+## Fonctionnalités
+
+- Connexion avec un JWT et conservation de la session dans le navigateur.
+- Création, consultation et reprise des discussions personnelles.
+- Chargement des actualités du jour et recherche de nouveaux articles pendant le chat.
+- Génération de revues structurées : titre, synthèse générale et synthèses d'articles.
+- Consultation des revues de toutes les discussions, liens vers les sources et copie du contenu.
+- Sélection des passages d'articles avec un RAG avant la rédaction de la revue.
 
 ## Prérequis
 
-- Docker
-- Python 3.13
-- uv
-- Node.js 22.19
+| Outil | Version utilisée par le projet |
+| --- | --- |
+| Python | 3.13, indiqué dans `backend/.python-version` |
+| Node.js | 24, comme dans la CI |
+| uv | Gestion des dépendances Python ; la CI utilise 0.9.18 |
+| npm | Fourni avec Node.js |
+| Docker | Pour PostgreSQL 17 en local et l'image du backend |
 
-## Installation
+Les dépendances Python sont décrites dans `backend/pyproject.toml` et verrouillées dans `backend/uv.lock`. Les dépendances JavaScript sont décrites dans `frontend/package.json` et verrouillées dans `frontend/package-lock.json`.
 
-1. Cloner le repository
-2. Démarrer le backend aved les instructions du fichier `backend/README.md`
-3. Installer et démarrer le frontend depuis le dossier `frontend/` :
+## Démarrage local
+
+Après avoir cloné le dépôt, suivre la configuration initiale du [backend](backend/README.md#configuration) et démarrer PostgreSQL selon le [guide de la base](backend/README.md#base-de-données-locale). Renseigner les clés Mistral et World News API dans `backend/.env`.
+
+Dans un premier terminal, depuis la racine :
 
 ```bash
-npm install
+cd backend
+uv sync --frozen
+uv run --env-file .env src/main.py
+```
+
+Dans un second terminal, depuis la racine :
+
+```bash
+cd frontend
+npm ci
+# À la première installation, créer le fichier de configuration locale :
 cp .env.example .env.local
 npm run dev
 ```
 
-Le frontend est accessible sur `http://localhost:3000`. Voir `frontend/README.md` pour plus de détails.
+`frontend/.env.local` contient `NEXT_PUBLIC_API_URL=http://127.0.0.1:8000` pour le développement local. Les paramètres de chaque service sont détaillés dans les [instructions backend](backend/README.md) et [frontend](frontend/README.md).
 
-La connexion est disponible sur `/connexion` avec `test@test.com` et le mot de passe `test`. Le JWT est enregistré dans le local storage. Configurer `JWT_SECRET_KEY` et `CORS_ORIGINS` dans le backend, et `NEXT_PUBLIC_API_URL` dans le frontend, comme indiqué dans leurs README.
+| Service | Adresse locale |
+| --- | --- |
+| Frontend | <http://localhost:3000> |
+| API | <http://localhost:8000> |
+| Documentation interactive FastAPI | <http://localhost:8000/docs> |
+| PostgreSQL | `localhost:5434`, port interne Docker `5432` |
 
-## Choix technologiques
+Se connecter sur `/connexion` avec **`test@test.com`** et le mot de passe **`test`**. Ce compte est créé au démarrage du backend. Pour essayer le RAG, demander une nouvelle recherche d'articles dans le chat, puis générer une revue sur le sujet exploré.
 
-### Frontend
-
-**Next.js**, avec JavaScript, App Router, CSS Modules et ESLint.
+## Vérifications
 
 ### Backend
 
-- **Python** pour bénéficier de son écosystème de librairies IA
-- **FastAPI** pour le développement de l'API
-- Connection avec des **JWT**
-- **SQLModel** comme ORM : fait pour bien marcher avec FastAPI.
-  - Branché à une base de données **PostgreSQL**
-- **PydanticAI** comme client qui s'intégrera aussi bien avec les autres outils de la stack backend
-- Attention à la **sécurité des données**. On ne veut pas qu’un utilisateur puisse accéder aux chats d’un autre utilisateur ou les modifier.
-  - Le produit aura rapidement beaucoup d’utilisateurs professionnels il est donc crucial de garantir le fonctionnement correct de cette fonctionnalité par l'**implémentation de tests automatisés qui s'exécutent par une Github Action**.
-- Pour les sources de news, on utilisera l’API [**WorldNewsAPI**](https://worldnewsapi.com/).
-- Pour déployer on mettra le frontend sur **Vercel** et le backend sur **Railway**.
+Depuis la racine du dépôt :
 
-### Documentation
+```bash
+cd backend
+uv sync --frozen
+uv run --no-sync pytest -q
+```
 
-Une documentation claire devra être rédigée et ajoutée dans un dossier `docs/`.
+Les tests utilisent une base SQLite en mémoire et des API simulées. Ils vérifient les autorisations, la persistance des discussions et revues, les appels d'outils, le RAG et les erreurs. Ils ne nécessitent ni clé API ni PostgreSQL démarré.
 
-Elle devra inclure des suggestions d'amélioration concernant la qualité et la performance de la partie IA du système. Chaque recommandation doit être illustrée par une une métrique ou un exemple, une proposition d’implémentation réalisable, ainsi qu'un objectif mesurable.
+### Frontend
 
+Depuis la racine du dépôt :
 
-Par ailleurs, pour faciliter la maintenance du projet à long terme, le code du projet devra être clair et bien structuré, accompagné de commentaires qui expliquent les sections de code complexes.
+```bash
+cd frontend
+npm ci
+npm run lint
+npm run build
+```
 
-### Deploiement
+La [GitHub Action](.github/workflows/ci.yml) exécute ces vérifications sur les pushes et les pull requests visant `main`.
 
-Les étapes et réglages sont décrits dans le [guide de déploiement](docs/deploiement.md). Les URL publiques y seront renseignées après le premier déploiement.
+## Documentation
 
-#### Frontend
+| Guide | Contenu |
+| --- | --- |
+| [Architecture et choix techniques](docs/architecture.md) | Structure des dossiers, composants, données, parcours et raisons des choix |
+| [Backend](backend/README.md) | Configuration, PostgreSQL, lancement, authentification et tests |
+| [Frontend](frontend/README.md) | Configuration, composants, lancement et vérifications |
+| [Chat et recherche d'articles](docs/chat.md) | Contexte d'actualités, outil World News API, historique et routes |
+| [Revues de presse](docs/reviews.md) | Agent spécialisé, sortie structurée, sauvegarde et consultation |
+| [RAG](docs/rag.md) | Documents complets, embeddings Mistral, index LlamaIndex et sélection |
+| [Regard critique et améliorations](docs/ameliorations.md) | Mesures de performance, qualité des résultats et pistes de réalisation |
+| [Déploiement](docs/deploiement.md) | Vercel, Railway, variables et déploiements automatiques |
 
-Déployer le frontend sur [Vercel](https://vercel.com/dashboard), avec `frontend` comme **Root Directory** et `main` comme branche de production.
+## Hébergement
 
-#### Backend
-
-Déployer le backend sur [Railway](https://railway.com/dashboard).
-
-Configurer `/backend` comme **Root Directory** et suivre la branche `main`. Railway utilise le Dockerfile de ce dossier.
-
-Créer PostgreSQL dans le même projet Railway et ajouter `DATABASE_URL` aux variables du backend comme référence vers le service PostgreSQL. Générer ensuite un domaine public pour le backend dans **Networking → Public Networking**.
-
-Les intégrations GitHub de Vercel et Railway doivent déclencher les déploiements à chaque push sur `main`.
+Le frontend est hébergé sur Vercel ; le backend et PostgreSQL sont hébergés sur Railway. Les services suivent la branche `main` du même dépôt avec `frontend` et `backend` comme répertoires racines respectifs. Les adresses publiques seront renseignées ultérieurement dans le [guide de déploiement](docs/deploiement.md#adresses-de-production).

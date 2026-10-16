@@ -1,5 +1,7 @@
 # Revues de presse
 
+Le [guide d'architecture](architecture.md) présente les composants et les parcours de génération.
+
 La sélection des articles complets avec LlamaIndex est détaillée dans le [guide RAG](rag.md).
 
 ## Utilisation
@@ -24,7 +26,7 @@ Le prompt demande de synthétiser uniquement les faits présents dans l'historiq
 - `summary` : synthèse générale ;
 - `articles` : jusqu'à dix articles, avec `title`, `summary`, `url` et `published_at`.
 
-Le mécanisme de sortie structurée de PydanticAI utilise un outil de sortie ; cet outil ne fait aucun appel externe. Les textes sont validés et bornés avec Pydantic. Un validateur compare les liens générés à ceux des sources sélectionnées en mode RAG, ou à ceux de l'historique sinon. Un lien inconnu provoque une demande de correction au modèle. En mode RAG, les titres et dates sont repris des documents conservés. La fidélité de la synthèse reste à évaluer.
+Le mécanisme de sortie structurée de PydanticAI utilise un outil de sortie ; cet outil ne fait aucun appel externe. Les textes sont validés et bornés avec Pydantic. Un validateur compare les liens générés à ceux des sources sélectionnées en mode RAG, ou à ceux de l'historique sinon. Un lien inconnu provoque une demande de correction au modèle. En mode RAG, les titres et dates sont repris des documents conservés.
 
 ## Sauvegarde et migration
 
@@ -64,9 +66,5 @@ uv run pytest -q
 ```
 
 Les tests utilisent `TestModel` et `FunctionModel`, sans appels réels. Ils couvrent plusieurs revues par chat et plusieurs chats, la persistance de la sortie structurée, l'historique complet reçu par l'agent, l'absence d'outils de recherche, la validation des liens, les erreurs, les conflits, la migration et les autorisations entre utilisateurs. La CI GitHub existante exécute aussi ces tests.
-
-## Évolution des performances
-
-La liste charge actuellement les revues de toutes les discussions. Sur un compte possédant 500 revues, mesurer le poids de la réponse et le temps d'affichage. Une amélioration consiste à stocker les revues dans une table dédiée et à paginer les métadonnées, en chargeant le détail à l'ouverture. Objectif : moins de 100 Ko pour la première page et un affichage en moins d'une seconde sur le jeu de test.
 
 Référence : [sorties structurées PydanticAI](https://ai.pydantic.dev/output/#tool-output).

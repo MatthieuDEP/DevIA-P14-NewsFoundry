@@ -4,8 +4,10 @@ Le même dépôt GitHub alimente deux déploiements : le frontend sur Vercel et 
 
 ## Adresses de production
 
-- Frontend Vercel : à renseigner après le premier déploiement.
-- API Railway : à renseigner après génération du domaine public.
+- Frontend Vercel : à renseigner ultérieurement.
+- API Railway : à renseigner ultérieurement.
+
+Les adresses publiques seront complétées ultérieurement. Le [guide d'architecture](architecture.md) décrit les échanges entre ces services.
 
 ## Préparer le dépôt
 
@@ -96,7 +98,7 @@ Un commit local ne suffit pas : il doit être poussé sur `main` dans GitHub.
 2. Vérifier qu'un déploiement Vercel et un déploiement du backend Railway sont déclenchés.
 3. Vérifier que les deux déploiements utilisent le commit attendu et aboutissent.
 4. Ouvrir le frontend et la route `/` de l'API.
-5. Renseigner les deux adresses de production en haut de ce document.
+5. Conserver les deux adresses de production pour compléter ce document.
 
 Les intégrations Git des plateformes suffisent pour ces déploiements automatiques. PostgreSQL conserve ses données entre les déploiements du backend ; son service n'est pas reconstruit à chaque commit applicatif.
 
